@@ -1,16 +1,17 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+
+#include "format_reader.h"
 #include "exif_parser.h"
 
 
 
 
 
-uint8_t readImageFormat(const uint8_t *buffer, size_t length) {
-    r
-
-}
+//////// ** ////////
+// FORMAT READERS //
+//////// ** ////////
 
 bool is_jpeg(const uint8_t *buffer, size_t length) {
 
@@ -32,7 +33,7 @@ bool is_jpeg(const uint8_t *buffer, size_t length) {
     // File is jpeg
     return true;
 
-            // TODO check these
+    // TODO check these
     // 1. walk through each segment (marker starts with 0xFF)
     // 2. handle segment lengths
     // 3. skip or parse APPO/APP1 segments
@@ -55,4 +56,12 @@ bool is_heic() {
 
 bool is_webp() {
     return false;
+}
+
+
+uint8_t readImageFormat(const uint8_t *buffer, size_t length) {
+    if(is_jpeg(buffer, length)) {
+        // parse the image
+    }
+
 }
