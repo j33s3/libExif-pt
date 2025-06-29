@@ -13,7 +13,7 @@ $(LIB): $(OBJ)
 	ar rcs $@ $^
 
 test: all
-	$(CC) tests/test_main.c -Iinclude -L. ./libExif-pt.a -o test_runner
+	$(CC) tests/test_exif_parser.c -Iinclude -L. ./libExif-pt.a -o test_runner
 	./test_runner
 
 clean:
