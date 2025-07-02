@@ -6,11 +6,12 @@
  * @lastModified    2025-06-30 11:20:10
 */
 
-#include <endian.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
 #include "exif_parser.h"
 
 
@@ -24,12 +25,14 @@ const char *get_error_string(ErrorCode code) {
         case ERR_EXIF_MISSING: return "Missing EXIF Data";
         case ERR_ENDIAN_MISSING: return "Missing Enddianess";
         case ERR_TIFF_MISSING: return "Missing TIFF";
+        case ERR_INVALID_TAG: return "Tag is unkown or invalid";
+        case ERR_MALLOC_BYTE_TRANS: return "Error allocating memory when translating from byte";
+        case ERR_MALLOC_ASCII_TRANS: return "Error allocating memory when translating from ascii";
+        case ERR_MALLOC_RATIONAL_TRANS: return "Error allocating memory when translating from rational";
         case ERR_UNKNOWN: return "Unknown Error";
         default: return "unknown";
     }
 }
-
-
 
 
 // Array of ExifTag struct
@@ -107,7 +110,7 @@ const char *get_exif_tag_name(uint16_t tag) {
 void parse_jpeg(const uint8_t *buffer, size_t length) {
     size_t i = 2;
     uint16_t seg_length = 0;
-    uint8_t offset = 0;
+    uint8_t offset = 10;
 
     // Iterate through the items till all is found
     while (i + 4 < length) {
@@ -142,9 +145,6 @@ void parse_jpeg(const uint8_t *buffer, size_t length) {
 
                 ErrorCode response = read_jpeg_u8(buffer, offset, seg_length);
 
-                // printf("ERROR: %s", get_error_string(response));
-                printf("ERROR: %d ", response);
-                printf("ERROR: %s", get_error_string(response));
                 fflush(stdout);
             }
 
@@ -153,7 +153,7 @@ void parse_jpeg(const uint8_t *buffer, size_t length) {
         }
         i++;
         // Tracks the offset from the begining of the image for reference later on
-        offset = i;
+        offset += i;
     }
 
         printf("offset from the beggining, %d", offset);
@@ -173,13 +173,13 @@ void parse_jpeg(const uint8_t *buffer, size_t length) {
  */
 static ErrorCode read_jpeg_u8(const uint8_t *buffer, size_t offset, size_t exifLength) {
     char *outputBuffer[1001];
-    int post = 0;
+    int pos = 0;
     uint16_t tiff_tags = 0;
 
     bool big_endian = false;
 
     // Iterator (Start at Exif and after Marker, seg_length and "Exif\0\0")
-    size_t i = offset + 10;
+    size_t i = offset;
 
 
 
@@ -213,14 +213,222 @@ static ErrorCode read_jpeg_u8(const uint8_t *buffer, size_t offset, size_t exifL
 
     
     // TODO ADD OTHER TAGS HERE
+    // Each TIFF item is going to be 12 bytes
+    // for(int j = 0; j < tiff_tags; j++) {
+    for(int j = 0; j < 1; j++) {
+        const char *tagName = get_exif_tag_name((buffer[i] << 8) | buffer[i + 1]);
+        i += 2;
+        
+        uint8_t input[8];
+
+        for (int j = 0; j < 8; j++) {
+            input[j] = buffer[i + 2 + j];
+        }
+
+        char *output;
+
+        ErrorCode status;
+
+        switch ((buffer[i] << 8) | buffer[i + 1]) {
+            case 0x0001: //byte
+                printf("\n%s\n", "byte");
+                status = translate_byte(input, offset, buffer, output);
+                break;
+            case 0x0002: //ascii
+                printf("\n%s\n", "ascii");
+                status = translate_ascii(input, offset, buffer, output);
+                break;
+            case 0x0003: //short
+                // status = translate_short(input, offset);
+                break;
+            case 0x0004: //long
+                // status = translate_long(input, offset, buffer);
+                break;
+            case 0x0005: //rational
+                // status = translate_rational(input, offset, buffer);
+                break;
+            case 0x0007: //undefined
+                // status = translate_undefined(input, tagName, offset, buffer);
+                break;
+            case 0x0009: //slong
+                // status = translate_slong(input, offset, buffer);
+                break;
+            case 0x000A: //srational
+                // status = translate_srational(input, offset, buffer);
+                break;
+        default: return ERR_INVALID_TAG;
+
+        i += 10;
+    }
+
+    // todo convert to user error
+    if (get_error_string(status)) {
+        int len = strlen(output);
+
+        if(pos + len < sizeof(outputBuffer)) {
+            strcpy(&outputBuffer[pos], output);
+        }
+        free(output);  // clean up!
+    }
+
+
+
+
+    }
     printf("%s", get_exif_tag_name((buffer[i] << 8) | buffer[i + 1]));
 
     return ERR_OK;
     
+}
 
+static ErrorCode translate_byte(uint8_t *input, size_t offset, const uint8_t *buffer, char *output) {
+    // iterator
+    size_t i = 0;
+
+    // get the byte count from tag
+    const uint32_t count = ((input[i]) << 24 |
+                            (input[i + 1]) << 16 | 
+                            (input[i + 2]) << 8 |
+                            (input[i + 3]));
+    i += 4;
+
+    // fetches the value from the tag
+    const uint32_t value = ((input[i]) << 24 |
+                        (input[i + 1]) << 16 | 
+                        (input[i + 2]) << 8 |
+                        (input[i + 3]));
     
+    // if the count is under 4 bytes look at tag
+    if (count <= 4) {
+
+        output = malloc(11);
+        if (output == NULL) {
+            return ERR_MALLOC_BYTE_TRANS;
+        }
+
+        snprintf(output, 11, "0x%08X", value);
+
+        // Success
+        return ERR_OK;
+
+    // if the count is too large look at offset
+    } else {
+        char *output = malloc(count + 3);
+        int pos = 0;
+        
+        // if output did not allocate properly
+        if (output == NULL) {
+            return ERR_MALLOC_BYTE_TRANS;
+        }
+
+        // itterate over every byte and append it to the output buffer
+        for (int j = offset + value; j < count + offset + value; j++) {
+            int written = snprintf(&output[pos], sizeof(output) - pos, "0x%02X ", i);
+            if (written < 0 || written >= (int)(sizeof(output) - pos)) {
+                break;
+            }
+            pos += written;
+        }
+
+        // Success
+        return ERR_OK;
+    }
+
+}
+
+static ErrorCode translate_ascii(const uint8_t *input, size_t offset, const uint8_t *buffer, char *output) {
+    // Iterator
+    size_t i = 0;
 
 
+
+        // get the byte count from tag
+    const uint32_t count = ((input[i]) << 24 |
+                            (input[i + 1]) << 16 | 
+                            (input[i + 2]) << 8 |
+                            (input[i + 3]));
+
+    i += 4;
+
+        printf("\n%d\n", i);
+
+
+
+
+    // less than 4 bytes
+    if (count <= 4) {
+
+
+
+        
+
+        // try to allocate memory to the output
+        output = malloc(11);
+        if(output == NULL) {
+            return ERR_MALLOC_ASCII_TRANS;
+        }
+
+    size_t pos = 0;
+
+    for (int j = i; j < count; j++) {
+        char c = (char)input[j];
+        if (isprint(c)) {
+            output[pos++] = c;
+        } else {
+            output[pos++] = '.';  // replace non-printables
+        }
+    }
+
+    output[pos] = '\0';  // null-terminate
+
+
+    }
+
+    // exceeds 4 bytes
+    else {
+
+
+
+        output = malloc(count + 3);
+
+        
+        if(output == NULL) {
+            return ERR_MALLOC_ASCII_TRANS;
+        }
+
+        size_t pos = 0;
+
+
+
+
+
+        // fetches the value from the tag
+        const uint32_t value = ((input[i]) << 24 |
+                            (input[i + 1]) << 16 | 
+                            (input[i + 2]) << 8 |
+                            (input[i + 3]));
+
+
+
+
+        for (int j = offset + value; j < offset + value + count; j++) {
+
+        printf("\n%d,", j - offset - value, buffer[j]);
+
+
+            char c = (char)buffer[j];
+            printf("\n%c\n", c);
+            if (isprint(c)) {
+                output[pos++] = c;
+            } else {
+                output[pos++] = '.';  // replace non-printables
+            }
+        }
+        output[pos] = '\0';
+    }
+
+    // Success
+    return ERR_OK;
 }
 
 
