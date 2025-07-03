@@ -302,7 +302,7 @@ static ErrorCode read_jpeg_u8(const uint8_t *buffer, size_t offset, size_t exifL
         int len = strlen(output);
 
         if(pos + len < sizeof(outputBuffer)) {
-            strcpy(&outputBuffer[pos], output);
+            strcpy(outputBuffer[pos], output);
         }
         free(output);  // clean up!
     }
