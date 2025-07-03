@@ -17,6 +17,9 @@ typedef enum {
     ERR_INVALID_TAG,
     ERR_MALLOC_BYTE_TRANS,
     ERR_MALLOC_ASCII_TRANS,
+    ERR_SHORT_COUNT,
+    ERR_LONG_COUNT,
+    ERR_RATIONAL_COUNT,
     ERR_MALLOC_RATIONAL_TRANS,
     ERR_UNKNOWN,
 } ErrorCode;
@@ -48,6 +51,7 @@ static ErrorCode read_jpeg_u8(const uint8_t *buffer, size_t offset, size_t exifL
 
 static ErrorCode translate_byte(uint8_t *input, size_t offset, const uint8_t *buffer, char *output);
 static ErrorCode translate_ascii(const uint8_t *input, size_t offset, const uint8_t *buffer, char *output);
+static ErrorCode translate_rational(const uint8_t *input, size_t offset, const uint8_t *buffer, char *output);
 
 
 uint8_t read_u8(const uint8_t *buffer, size_t offset);

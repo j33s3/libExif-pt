@@ -28,6 +28,9 @@ const char *get_error_string(ErrorCode code) {
         case ERR_INVALID_TAG: return "Tag is unkown or invalid";
         case ERR_MALLOC_BYTE_TRANS: return "Error allocating memory when translating from byte";
         case ERR_MALLOC_ASCII_TRANS: return "Error allocating memory when translating from ascii";
+        case ERR_SHORT_COUNT: return "The count of short items exceeds 1";
+        case ERR_LONG_COUNT: return "The count of long items exceeds 4";
+        case ERR_RATIONAL_COUNT: return "The count of rational items exceeds 1";
         case ERR_MALLOC_RATIONAL_TRANS: return "Error allocating memory when translating from rational";
         case ERR_UNKNOWN: return "Unknown Error";
         default: return "unknown";
@@ -214,8 +217,7 @@ static ErrorCode read_jpeg_u8(const uint8_t *buffer, size_t offset, size_t exifL
     
     // TODO ADD OTHER TAGS HERE
     // Each TIFF item is going to be 12 bytes
-    // for(int j = 0; j < tiff_tags; j++) {
-    for(int j = 0; j < 1; j++) {
+    for(int j = 0; j < tiff_tags; j++) {
         const char *tagName = get_exif_tag_name((buffer[i] << 8) | buffer[i + 1]);
         i += 2;
         
@@ -229,6 +231,12 @@ static ErrorCode read_jpeg_u8(const uint8_t *buffer, size_t offset, size_t exifL
 
         ErrorCode status;
 
+        // get the byte count from tag
+        const uint32_t count = ((input[0]) << 24 |
+                                (input[1]) << 16 | 
+                                (input[2]) << 8 |
+                                (input[3]));
+
         switch ((buffer[i] << 8) | buffer[i + 1]) {
             case 0x0001: //byte
                 printf("\n%s\n", "byte");
@@ -238,23 +246,51 @@ static ErrorCode read_jpeg_u8(const uint8_t *buffer, size_t offset, size_t exifL
                 printf("\n%s\n", "ascii");
                 status = translate_ascii(input, offset, buffer, output);
                 break;
-            case 0x0003: //short
-                // status = translate_short(input, offset);
+            case 0x0003:  //short
+                printf("\n%s\n", "short");
+
+
+
+                if (count > 1) {
+                    return ERR_SHORT_COUNT;
+                }
+
+                // Adding the item
+                snprintf(&output[0], sizeof(output), "%d", (int16_t)((input[4] << 8) | input[5]));
+                
                 break;
             case 0x0004: //long
-                // status = translate_long(input, offset, buffer);
+                printf("\n%s\n", "long");
+
+
+                if (count > 4) {
+                    return ERR_LONG_COUNT;
+                }
+
+                // Adding the item
+                snprintf(&output[0], sizeof(output), "%d", (int32_t)((
+                    input[4] << 24 | 
+                    input[5] << 16 |
+                    input[6] << 8  | 
+                    input[7])
+                ));
+
                 break;
-            case 0x0005: //rational
-                // status = translate_rational(input, offset, buffer);
+            case 0x0005: // rational
+                printf("\n%s\n", "rational");
+                status = translate_rational(input, offset, buffer, output);
                 break;
             case 0x0007: //undefined
-                // status = translate_undefined(input, tagName, offset, buffer);
+                // TODO
+                output = "undefined";
                 break;
             case 0x0009: //slong
+                output = "undefined";
                 // status = translate_slong(input, offset, buffer);
                 break;
             case 0x000A: //srational
                 // status = translate_srational(input, offset, buffer);
+                output = "undefined";
                 break;
         default: return ERR_INVALID_TAG;
 
@@ -430,6 +466,49 @@ static ErrorCode translate_ascii(const uint8_t *input, size_t offset, const uint
     // Success
     return ERR_OK;
 }
+
+
+
+static ErrorCode translate_rational(const uint8_t *input, size_t offset, const uint8_t *buffer, char *output) {
+    // iterator
+
+    // get the byte count from tag
+    const uint32_t count = ((input[0]) << 24 |
+                            (input[1]) << 16 | 
+                            (input[2]) << 8 |
+                            (input[3]));
+
+    // fetches the value from the tag
+    const uint32_t value = ((input[4]) << 24 |
+                        (input[5]) << 16 | 
+                        (input[6]) << 8 |
+                        (input[7]));
+
+    // Check that the count is only one rational
+    if (count != 1) {
+       return ERR_RATIONAL_COUNT;
+    }
+
+    size_t dataLoc = offset + value;
+
+    // Read the values from the resgister
+    const uint32_t numerator = (buffer[dataLoc++] << 24 |
+                                buffer[dataLoc++] << 16 |
+                                buffer[dataLoc++] << 8 |
+                                buffer[dataLoc++]);
+
+    const uint32_t denominator = (buffer[dataLoc++] << 24 |
+                                  buffer[dataLoc++] << 16 |
+                                  buffer[dataLoc++] << 8 |
+                                  buffer[dataLoc++]);
+
+    // convert the data into a string
+    snprintf(&output[0], sizeof(output), "%d/%d", numerator, denominator);
+
+
+    return ERR_OK;
+}
+
 
 
 uint8_t read_u8(const uint8_t *buffer, size_t offset) {
