@@ -49,14 +49,9 @@ void parse_jpeg(const uint8_t *buffer, size_t length);
 
 static ErrorCode read_jpeg_u8(const uint8_t *buffer, size_t offset, size_t exifLength);
 
-static ErrorCode translate_byte(uint8_t *input, size_t offset, const uint8_t *buffer, char *output);
-static ErrorCode translate_ascii(const uint8_t *input, size_t offset, const uint8_t *buffer, char *output);
-static ErrorCode translate_rational(const uint8_t *input, size_t offset, const uint8_t *buffer, char *output);
-
-
-uint8_t read_u8(const uint8_t *buffer, size_t offset);
-uint16_t read_u16_be(const uint8_t *buffer, size_t offset);
-uint32_t read_u32_be(const uint8_t *buffer, size_t offset);
+static ErrorCode translate_byte(const uint32_t count, const uint8_t *val_or_off, size_t offset, const uint8_t *buffer, char *output);
+static ErrorCode translate_ascii(const uint32_t count, const uint8_t *val_or_off, size_t offset, const uint8_t *buffer, char *output);
+static ErrorCode translate_rational(const uint32_t count, const uint8_t *val_or_off, size_t offset, const uint8_t *buffer, char *output);
 
 
 #endif // EXIF_PARSER_H

@@ -184,8 +184,6 @@ static ErrorCode read_jpeg_u8(const uint8_t *buffer, size_t offset, size_t exifL
     // Iterator (Start at Exif and after Marker, seg_length and "Exif\0\0")
     size_t i = offset;
 
-
-
     // Read the endianess
     switch((buffer[i] << 8) | buffer[i + 1]) {
         case(0x4D4D): 
@@ -212,73 +210,112 @@ static ErrorCode read_jpeg_u8(const uint8_t *buffer, size_t offset, size_t exifL
     tiff_tags = ((buffer[i] << 8) | buffer[i + 1]);
     i += 2;
 
+
+    fflush(stdout);
     printf("\n TIFF TAGS %d\n", tiff_tags);
 
     
     // TODO ADD OTHER TAGS HERE
     // Each TIFF item is going to be 12 bytes
     for(int j = 0; j < tiff_tags; j++) {
+
+        // ** TAG ** //
         const char *tagName = get_exif_tag_name((buffer[i] << 8) | buffer[i + 1]);
         i += 2;
-        
-        uint8_t input[8];
 
-        for (int j = 0; j < 8; j++) {
-            input[j] = buffer[i + 2 + j];
+        // ** TYPE ** //
+        const uint16_t type = ((buffer[i] << 8) | buffer[i + 1]);
+        i += 2;
+        
+
+        // ** COUNT ** //
+        const uint32_t count = ((buffer[i]) << 24 |
+                                (buffer[i + 1]) << 16 |
+                                (buffer[i + 2]) << 8  |
+                                (buffer[i + 3]));
+        i += 4;
+
+        // ** VALUE ** //
+        uint8_t value[20];
+        for (int k = 0; k < 4; k++) {
+            value[k] = buffer[i++];
         }
 
-        char *output;
+        for(int it = 0; it < 4; it++) {
+            printf("\n0x%02X\n", value[it]);
+        }
 
+
+        // store output and accept respounse as ErrorCode
+        char *output;
         ErrorCode status;
 
-        // get the byte count from tag
-        const uint32_t count = ((input[0]) << 24 |
-                                (input[1]) << 16 | 
-                                (input[2]) << 8 |
-                                (input[3]));
 
-        switch ((buffer[i] << 8) | buffer[i + 1]) {
+
+        printf("Count: %d", count);
+        printf("\nTYPE: %d", type);
+
+        switch (type) {
             case 0x0001: //byte
                 printf("\n%s\n", "byte");
-                status = translate_byte(input, offset, buffer, output);
+                output = malloc(count + 1);
+                status = translate_byte(count, value, offset, buffer, output);
                 break;
             case 0x0002: //ascii
                 printf("\n%s\n", "ascii");
-                status = translate_ascii(input, offset, buffer, output);
+                printf("\nSIZE: %d", count);
+                output = malloc(count + 3);
+
+                printf("%zu", sizeof(output));
+
+                printf("\n%s\n", "ascii");
+
+
+
+                status = translate_ascii(count, value, offset, buffer, output);
+
+
                 break;
-            case 0x0003:  //short
+            case 0x0003: //short
                 printf("\n%s\n", "short");
+
+                // to accomadate for short max = 65535
+                output = malloc(7);
 
 
 
                 if (count > 1) {
-                    return ERR_SHORT_COUNT;
+                    status = ERR_SHORT_COUNT;
+                } else{
+                    // Adding the item
+                    snprintf(&output[0], sizeof(output), "%d", (int16_t)((value[0] << 8) | value[1]));
+                    status = ERR_OK;
                 }
 
-                // Adding the item
-                snprintf(&output[0], sizeof(output), "%d", (int16_t)((input[4] << 8) | input[5]));
-                
                 break;
+
             case 0x0004: //long
                 printf("\n%s\n", "long");
 
 
                 if (count > 4) {
-                    return ERR_LONG_COUNT;
+                    status = ERR_LONG_COUNT;
+                } else {
+                    // Adding the item
+                    snprintf(&output[0], sizeof(output), "%d", (int32_t)((
+                        value[0] << 24 | 
+                        value[1] << 16 |
+                        value[2] << 8  |
+                        value[3])
+                    ));
+                    status = ERR_OK;
                 }
 
-                // Adding the item
-                snprintf(&output[0], sizeof(output), "%d", (int32_t)((
-                    input[4] << 24 | 
-                    input[5] << 16 |
-                    input[6] << 8  | 
-                    input[7])
-                ));
 
                 break;
             case 0x0005: // rational
                 printf("\n%s\n", "rational");
-                status = translate_rational(input, offset, buffer, output);
+                status = translate_rational(count, value, offset, buffer, output);
                 break;
             case 0x0007: //undefined
                 // TODO
@@ -294,18 +331,22 @@ static ErrorCode read_jpeg_u8(const uint8_t *buffer, size_t offset, size_t exifL
                 break;
         default: return ERR_INVALID_TAG;
 
-        i += 10;
     }
 
-    // todo convert to user error
-    if (get_error_string(status)) {
-        int len = strlen(output);
+    // Increment iterate past the just-read tag
 
-        if(pos + len < sizeof(outputBuffer)) {
-            strcpy(outputBuffer[pos], output);
-        }
-        free(output);  // clean up!
-    }
+
+        // if(status == ERR_OK) { 
+        //     int len = strlen(output);
+
+        //     // Copy new value to the end
+        //     if(pos + len < sizeof(outputBuffer)) {
+        //         strcpy(outputBuffer[pos], output);
+        //     }
+
+        //     free(output);
+        // }
+    
 
 
 
@@ -317,27 +358,17 @@ static ErrorCode read_jpeg_u8(const uint8_t *buffer, size_t offset, size_t exifL
     
 }
 
-static ErrorCode translate_byte(uint8_t *input, size_t offset, const uint8_t *buffer, char *output) {
-    // iterator
-    size_t i = 0;
-
-    // get the byte count from tag
-    const uint32_t count = ((input[i]) << 24 |
-                            (input[i + 1]) << 16 | 
-                            (input[i + 2]) << 8 |
-                            (input[i + 3]));
-    i += 4;
+static ErrorCode translate_byte(const uint32_t count, const uint8_t *val_or_off, size_t offset, const uint8_t *buffer, char *output) {
 
     // fetches the value from the tag
-    const uint32_t value = ((input[i]) << 24 |
-                        (input[i + 1]) << 16 | 
-                        (input[i + 2]) << 8 |
-                        (input[i + 3]));
+    const uint32_t value = ((val_or_off[0]) << 24 |
+                            (val_or_off[1]) << 16 |
+                            (val_or_off[2]) << 8  |
+                            (val_or_off[3]));
     
     // if the count is under 4 bytes look at tag
     if (count <= 4) {
 
-        output = malloc(11);
         if (output == NULL) {
             return ERR_MALLOC_BYTE_TRANS;
         }
@@ -359,7 +390,7 @@ static ErrorCode translate_byte(uint8_t *input, size_t offset, const uint8_t *bu
 
         // itterate over every byte and append it to the output buffer
         for (int j = offset + value; j < count + offset + value; j++) {
-            int written = snprintf(&output[pos], sizeof(output) - pos, "0x%02X ", i);
+            int written = snprintf(&output[pos], sizeof(output) - pos, "0x%02X ", buffer[j]);
             if (written < 0 || written >= (int)(sizeof(output) - pos)) {
                 break;
             }
@@ -372,21 +403,15 @@ static ErrorCode translate_byte(uint8_t *input, size_t offset, const uint8_t *bu
 
 }
 
-static ErrorCode translate_ascii(const uint8_t *input, size_t offset, const uint8_t *buffer, char *output) {
-    // Iterator
-    size_t i = 0;
+static ErrorCode translate_ascii(const uint32_t count, const uint8_t *val_or_off, size_t offset, const uint8_t *buffer, char *output) {
+    
+    // If the malloc failed return an error
+    if(output == NULL) {
+        return ERR_MALLOC_ASCII_TRANS;
+    }
 
-
-
-        // get the byte count from tag
-    const uint32_t count = ((input[i]) << 24 |
-                            (input[i + 1]) << 16 | 
-                            (input[i + 2]) << 8 |
-                            (input[i + 3]));
-
-    i += 4;
-
-        printf("\n%d\n", i);
+    // iterator for tracking appending to string
+    size_t pos = 0;
 
 
 
@@ -394,66 +419,29 @@ static ErrorCode translate_ascii(const uint8_t *input, size_t offset, const uint
     // less than 4 bytes
     if (count <= 4) {
 
-
-
-        
-
-        // try to allocate memory to the output
-        output = malloc(11);
-        if(output == NULL) {
-            return ERR_MALLOC_ASCII_TRANS;
+        for (int j = 0; j < count; j++) {
+            char c = (char)val_or_off[j];
+            if (isprint(c)) {
+                output[pos++] = c;
+            } else {
+                output[pos++] = '.';  // replace non-printables
+            }
         }
-
-    size_t pos = 0;
-
-    for (int j = i; j < count; j++) {
-        char c = (char)input[j];
-        if (isprint(c)) {
-            output[pos++] = c;
-        } else {
-            output[pos++] = '.';  // replace non-printables
-        }
-    }
-
-    output[pos] = '\0';  // null-terminate
-
-
+        output[pos] = '\0';  // null-terminate
     }
 
     // exceeds 4 bytes
     else {
 
-
-
-        output = malloc(count + 3);
-
-        
-        if(output == NULL) {
-            return ERR_MALLOC_ASCII_TRANS;
-        }
-
-        size_t pos = 0;
-
-
-
-
-
         // fetches the value from the tag
-        const uint32_t value = ((input[i]) << 24 |
-                            (input[i + 1]) << 16 | 
-                            (input[i + 2]) << 8 |
-                            (input[i + 3]));
-
-
-
+        const uint32_t value = ((val_or_off[0]) << 24 |
+                                (val_or_off[1]) << 16 |
+                                (val_or_off[2]) << 8  |
+                                (val_or_off[3]));
 
         for (int j = offset + value; j < offset + value + count; j++) {
 
-        printf("\n%d,", j - offset - value, buffer[j]);
-
-
             char c = (char)buffer[j];
-            printf("\n%c\n", c);
             if (isprint(c)) {
                 output[pos++] = c;
             } else {
@@ -461,6 +449,10 @@ static ErrorCode translate_ascii(const uint8_t *input, size_t offset, const uint
             }
         }
         output[pos] = '\0';
+
+        printf("%s", output);
+
+
     }
 
     // Success
@@ -469,20 +461,14 @@ static ErrorCode translate_ascii(const uint8_t *input, size_t offset, const uint
 
 
 
-static ErrorCode translate_rational(const uint8_t *input, size_t offset, const uint8_t *buffer, char *output) {
-    // iterator
-
-    // get the byte count from tag
-    const uint32_t count = ((input[0]) << 24 |
-                            (input[1]) << 16 | 
-                            (input[2]) << 8 |
-                            (input[3]));
+static ErrorCode translate_rational(const uint32_t count, const uint8_t *val_or_off, size_t offset, const uint8_t *buffer, char *output) {
 
     // fetches the value from the tag
-    const uint32_t value = ((input[4]) << 24 |
-                        (input[5]) << 16 | 
-                        (input[6]) << 8 |
-                        (input[7]));
+    const uint32_t value = ((val_or_off[0]) << 24 |
+                            (val_or_off[1]) << 16 |
+                            (val_or_off[2]) << 8  |
+                            (val_or_off[3]));
+
 
     // Check that the count is only one rational
     if (count != 1) {
@@ -494,12 +480,12 @@ static ErrorCode translate_rational(const uint8_t *input, size_t offset, const u
     // Read the values from the resgister
     const uint32_t numerator = (buffer[dataLoc++] << 24 |
                                 buffer[dataLoc++] << 16 |
-                                buffer[dataLoc++] << 8 |
+                                buffer[dataLoc++] << 8  |
                                 buffer[dataLoc++]);
 
     const uint32_t denominator = (buffer[dataLoc++] << 24 |
                                   buffer[dataLoc++] << 16 |
-                                  buffer[dataLoc++] << 8 |
+                                  buffer[dataLoc++] << 8  |
                                   buffer[dataLoc++]);
 
     // convert the data into a string
@@ -509,19 +495,3 @@ static ErrorCode translate_rational(const uint8_t *input, size_t offset, const u
     return ERR_OK;
 }
 
-
-
-uint8_t read_u8(const uint8_t *buffer, size_t offset) {
-    return buffer[offset];
-}
-
-uint16_t read_u16_be(const uint8_t *buffer, size_t offset) {
-    return (buffer[offset] << 8) | buffer[offset + 1];
-}
-
-uint32_t read_u32_be(const uint8_t *buffer, size_t offset) {
-    return (buffer[offset] << 24) |
-           (buffer[offset + 1] << 16) |
-           (buffer[offset + 2] << 8) |
-           (buffer[offset + 3]);
-}
