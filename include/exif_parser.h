@@ -17,10 +17,13 @@ typedef enum {
     ERR_INVALID_TAG,
     ERR_MALLOC_BYTE_TRANS,
     ERR_MALLOC_ASCII_TRANS,
+    ERR_MALLOC_SHORT_TRANS,
+    ERR_MALLOC_LONG_TRANS,
     ERR_SHORT_COUNT,
     ERR_LONG_COUNT,
     ERR_RATIONAL_COUNT,
     ERR_MALLOC_RATIONAL_TRANS,
+    ERR_MALLOC_UNDEFINED_TRANS,
     ERR_UNKNOWN,
 } ErrorCode;
 
@@ -47,11 +50,14 @@ const char *get_exif_tag_name(uint16_t tag);
 
 void parse_jpeg(const uint8_t *buffer, size_t length);
 
+
+
 static ErrorCode read_jpeg_u8(const uint8_t *buffer, size_t offset, size_t exifLength);
 
 static ErrorCode translate_byte(const uint32_t count, const uint8_t *val_or_off, size_t offset, const uint8_t *buffer, char *output);
 static ErrorCode translate_ascii(const uint32_t count, const uint8_t *val_or_off, size_t offset, const uint8_t *buffer, char *output);
 static ErrorCode translate_rational(const uint32_t count, const uint8_t *val_or_off, size_t offset, const uint8_t *buffer, char *output);
+static ErrorCode translate_srational(const uint32_t count, const uint8_t *val_or_off, size_t offset, const uint8_t *buffer, char *output);
 
 
 #endif // EXIF_PARSER_H

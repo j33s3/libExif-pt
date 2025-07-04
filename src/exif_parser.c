@@ -28,10 +28,13 @@ const char *get_error_string(ErrorCode code) {
         case ERR_INVALID_TAG: return "Tag is unkown or invalid";
         case ERR_MALLOC_BYTE_TRANS: return "Error allocating memory when translating from byte";
         case ERR_MALLOC_ASCII_TRANS: return "Error allocating memory when translating from ascii";
+        case ERR_MALLOC_SHORT_TRANS: return "Error allocating memory when translating from short";
+        case ERR_MALLOC_LONG_TRANS: return "Error allocating memory when translating from long or signed";
         case ERR_SHORT_COUNT: return "The count of short items exceeds 1";
         case ERR_LONG_COUNT: return "The count of long items exceeds 4";
         case ERR_RATIONAL_COUNT: return "The count of rational items exceeds 1";
-        case ERR_MALLOC_RATIONAL_TRANS: return "Error allocating memory when translating from rational";
+        case ERR_MALLOC_RATIONAL_TRANS: return "Error allocating memory when translating from rational or signed rational";
+        case ERR_MALLOC_UNDEFINED_TRANS: return "Error allocating memory when translating from undefined value";
         case ERR_UNKNOWN: return "Unknown Error";
         default: return "unknown";
     }
@@ -61,7 +64,7 @@ static const ExifTag exif_tags[] = {
     {0x9003, "DateTimeOriginal"},
     {0x9004, "CreateDate"},
     {0x9101, "ComponentsConfiguration"},
-    {0x9104, "ExposureCompensation"},
+    {0x9204, "ExposureCompensation"},
     {0x9207, "MeteringMode"},
     {0x9209, "Flash"},
     {0x920A, "FocalLength"},
@@ -94,8 +97,8 @@ static const ExifTag exif_tags[] = {
 const char *get_exif_tag_name(uint16_t tag) {
 
     size_t count = sizeof(exif_tags) / sizeof(exif_tags[0]);
-    for (size_t i = 0; i < 1; i++) {
-        if (exif_tags[i].tag == tag) {
+    for (size_t i = 0; i < count; i++) {
+        if(exif_tags[i].tag == tag) {
             return exif_tags[i].name;
         }
     }
@@ -159,7 +162,7 @@ void parse_jpeg(const uint8_t *buffer, size_t length) {
         offset += i;
     }
 
-        printf("offset from the beggining, %d", offset);
+        printf("%s", "EOF");
         fflush(stdout);
 
 
@@ -175,9 +178,11 @@ void parse_jpeg(const uint8_t *buffer, size_t length) {
  * @return uint8_t* 
  */
 static ErrorCode read_jpeg_u8(const uint8_t *buffer, size_t offset, size_t exifLength) {
-    char *outputBuffer[1001];
+    char *outputBuffer = malloc(2000);
     int pos = 0;
+    outputBuffer[pos++] = '{';
     uint16_t tiff_tags = 0;
+    uint16_t exif_tags = 0;
 
     bool big_endian = false;
 
@@ -215,12 +220,12 @@ static ErrorCode read_jpeg_u8(const uint8_t *buffer, size_t offset, size_t exifL
     printf("\n TIFF TAGS %d\n", tiff_tags);
 
     
-    // TODO ADD OTHER TAGS HERE
+
     // Each TIFF item is going to be 12 bytes
-    for(int j = 0; j < tiff_tags; j++) {
+    for(int j = 0; j < tiff_tags + exif_tags; j++) {
 
         // ** TAG ** //
-        const char *tagName = get_exif_tag_name((buffer[i] << 8) | buffer[i + 1]);
+        const  uint16_t tag = (buffer[i] << 8) | buffer[i + 1];
         i += 2;
 
         // ** TYPE ** //
@@ -241,68 +246,108 @@ static ErrorCode read_jpeg_u8(const uint8_t *buffer, size_t offset, size_t exifL
             value[k] = buffer[i++];
         }
 
-        for(int it = 0; it < 4; it++) {
-            printf("\n0x%02X\n", value[it]);
-        }
-
-
         // store output and accept respounse as ErrorCode
         char *output;
         ErrorCode status;
 
 
 
-        printf("Count: %d", count);
-        printf("\nTYPE: %d", type);
+
 
         switch (type) {
-            case 0x0001: //byte
-                printf("\n%s\n", "byte");
+            // **** BYTE **** //
+            case 0x0001: 
                 output = malloc(count + 1);
                 status = translate_byte(count, value, offset, buffer, output);
                 break;
-            case 0x0002: //ascii
-                printf("\n%s\n", "ascii");
-                printf("\nSIZE: %d", count);
+
+            // **** ASCII **** //
+            case 0x0002:
                 output = malloc(count + 3);
-
-                printf("%zu", sizeof(output));
-
-                printf("\n%s\n", "ascii");
-
-
+                if(output == NULL) {
+                    status = ERR_MALLOC_ASCII_TRANS;
+                    break;
+                }
 
                 status = translate_ascii(count, value, offset, buffer, output);
 
 
                 break;
+
+            // **** SHORT **** //
             case 0x0003: //short
-                printf("\n%s\n", "short");
 
                 // to accomadate for short max = 65535
-                output = malloc(7);
+                output = malloc(15);
 
 
+                if(output == NULL) {
+                    status = ERR_MALLOC_SHORT_TRANS;
+                    break;
+                }
 
                 if (count > 1) {
                     status = ERR_SHORT_COUNT;
-                } else{
-                    // Adding the item
-                    snprintf(&output[0], sizeof(output), "%d", (int16_t)((value[0] << 8) | value[1]));
+                }
+                else if (tag == 0xA001){
+                    switch((value[0] << 8) | value[1]) {
+                        case 0x1:
+                            snprintf(&output[0], 15, "%s", "sRGB");
+                            break;
+                        case 0x2:
+                            snprintf(&output[0], 15, "%s", "Adobe RGB");
+                            break;
+                        case 0xFFFD:
+                            snprintf(&output[0], 15, "%s", "Wide Gamut RGB");
+                            break;
+                        case 0xFFFE:
+                            snprintf(&output[0], 15, "%s", "ICC Profile");
+                            break;
+                        case 0xFFFF:
+                            snprintf(&output[0], 15, "%s", "Uncalibrated");
+                            break;
+                        default: 
+                            snprintf(&output[0], 15, "%s", "Unknown");
+                            break;
+                    }
+                }
+                else {
+                    // Adding the itemd
+                    snprintf(&output[0], sizeof(output), "%d", (uint16_t)((value[0] << 8) | value[1]));
                     status = ERR_OK;
                 }
 
                 break;
 
-            case 0x0004: //long
-                printf("\n%s\n", "long");
-
-
-                if (count > 4) {
+            // **** LONG **** //
+            case 0x0004:
+                
+                // to accomadate for long max = 4294967295
+                output = malloc(15);
+                if(output == NULL) {
+                    status = ERR_MALLOC_LONG_TRANS;
+                }
+                // if error in the count
+                if (count > 1) {
                     status = ERR_LONG_COUNT;
-                } else {
+                    break;
+                }
+
+                // ** EXIF OFFSET ** //
+                else if (exif_tags == 0 && tag == 0x8769) {
+                    i = offset +    ((value[0] << 24) |
+                                     (value[1] << 16) |
+                                     (value[2] << 8) |
+                                     (value[3]));
+
+                    exif_tags = ((buffer[i] << 8) | buffer[i + 1]);
+                    i += 2;
+                }
+
+                // ** LONG ** //
+                else {
                     // Adding the item
-                    snprintf(&output[0], sizeof(output), "%d", (int32_t)((
+                    snprintf(&output[0], sizeof(output), "%d", (uint32_t)((
                         value[0] << 24 | 
                         value[1] << 16 |
                         value[2] << 8  |
@@ -313,46 +358,230 @@ static ErrorCode read_jpeg_u8(const uint8_t *buffer, size_t offset, size_t exifL
 
 
                 break;
+
+            // **** RATIONAL **** //
             case 0x0005: // rational
-                printf("\n%s\n", "rational");
+                output = malloc(30);
+                if(output == NULL) {
+                    status = ERR_MALLOC_RATIONAL_TRANS;
+                }
+            
                 status = translate_rational(count, value, offset, buffer, output);
                 break;
+
+            // **** UNDEFINED **** //
             case 0x0007: //undefined
-                // TODO
-                output = "undefined";
+
+                size_t outPos = 0;
+
+                switch(tag) {
+                    // Itterator for values
+
+                    case 0x9000:    // Exif Version
+                    case 0xA000:    // FlashpixVersion
+                        output = malloc(10);
+
+                        if (output == NULL) {
+                            status = ERR_MALLOC_UNDEFINED_TRANS; 
+                            break;
+                        }
+
+                        if (count > 4) {
+                            snprintf(&output[0], 10, "%s", "Unknown");
+                            break;
+                        }
+
+                        for(int it = 0; it < 4; it++) {
+                            char c = (char)value[it];
+                            output[outPos++] = c;
+                            if(outPos == 2) {
+                                output[outPos++] = '.';
+                            }
+                        }
+                        status = ERR_OK;
+
+                        break;
+                    case 0x9101:    // ComponentConfiguration
+                        output = malloc(10);
+
+                        if (output == NULL) {
+                            status = ERR_MALLOC_UNDEFINED_TRANS; 
+                            break;
+                        }
+
+                        if (count > 4) {
+                            snprintf(&output[0], 10, "%s", "Unknown");
+                            break;
+                        }
+
+                        for (int it = 0; it < 4; it++) {
+                            switch(value[it]) {
+                                case 0:
+                                    output[outPos++] = '-';
+                                    break;
+                                case 1:
+                                    output[outPos++] = 'Y';
+                                    break;
+                                case 2:
+                                    output[outPos++] = 'C';
+                                    output[outPos++] = 'b';
+                                    break;
+                                case 3:
+                                    output[outPos++] = 'C';
+                                    output[outPos++] = 'r';
+                                    break;
+                                case 4:
+                                    output[outPos++] = 'R';
+                                    break;
+                                case 5:
+                                    output[outPos++] = 'G';
+                                    break;
+                                case 6:
+                                    output[outPos++] = 'B';
+                                    break;
+                            }
+                        }
+                        status = ERR_OK;
+                        break;
+
+
+                    case 0xA300:    // FileSource
+                        output = malloc(30);
+
+                        if (output == NULL) {
+                            status = ERR_MALLOC_UNDEFINED_TRANS; 
+                            break;
+                        }
+
+                        if (count > 4) {
+                            snprintf(&output[0], 30, "%s", "Unknown");
+                            break;
+                        } 
+
+                        switch(value[0]) {
+                            case 1:
+                                snprintf(&output[0], 30, "%s", "Film Scanner");
+                                break; 
+                            case 2:
+                                snprintf(&output[0], 30, "%s", "Reflection Print Scanner");
+                                break;
+                            case 3:
+                                snprintf(&output[0], 30, "%s", "Digital Camera");
+                                break;
+                            default: 
+                                snprintf(&output[0], 30, "%s", "Unknown");
+                                break;
+                        }
+                    status = ERR_OK;
+                    break;
+
+                    case 0xA301: // SceneType
+
+                        output = malloc(25);
+
+                        if(output == NULL) {
+                            status = ERR_MALLOC_UNDEFINED_TRANS;
+                            break;
+                        }
+
+                        if (count > 4) {
+                            snprintf(&output[0], 25, "%s", "Unknown");
+                            break;
+                        }
+
+                        if(value[0] == 1) {
+                            snprintf(&output[0], 25, "%s", "Directrly Photographed");
+
+                        } else {
+                            snprintf(&output[0], 25, "%s", "Unknown");
+                        }
+
+                    status = ERR_OK;
+                    break;
+                }
                 break;
+
+            // **** SLONG **** //
             case 0x0009: //slong
-                output = "undefined";
-                // status = translate_slong(input, offset, buffer);
+
+                output = malloc(15);
+                
+                if(output == NULL) {
+                    status = ERR_MALLOC_LONG_TRANS;
+                    break;
+                }
+
+                // if error in the count
+                if (count > 1) {
+                    status = ERR_LONG_COUNT;
+                    break;
+                }
+
+                
+
+                // Adding the item
+                snprintf(&output[0], sizeof(output), "%d", (int32_t)((
+                    value[0] << 24 | 
+                    value[1] << 16 |
+                    value[2] << 8  |
+                    value[3])
+                ));
+                status = ERR_OK;
+            
                 break;
+
+            // **** SRATIONAL **** //
             case 0x000A: //srational
-                // status = translate_srational(input, offset, buffer);
-                output = "undefined";
+                output = malloc(30);
+                if(output == NULL) {
+                    status = ERR_MALLOC_RATIONAL_TRANS;
+                }
+
+                status = translate_srational(count, value, offset, buffer, output);
                 break;
-        default: return ERR_INVALID_TAG;
-
-    }
-
-    // Increment iterate past the just-read tag
+            default: return ERR_INVALID_TAG;
+        }
 
 
-        // if(status == ERR_OK) { 
-        //     int len = strlen(output);
+     // Increment iterate past the just-read tagF
 
-        //     // Copy new value to the end
-        //     if(pos + len < sizeof(outputBuffer)) {
-        //         strcpy(outputBuffer[pos], output);
-        //     }
 
-        //     free(output);
-        // }
+        if(status == ERR_OK) { 
+            const char *tagName = get_exif_tag_name(tag);
+
+            int valLen = strlen(output);
+            int tagLen = strlen(tagName);
+
+            if(pos + valLen + tagLen < 2000 && tag != 0x8769) {
+
+                outputBuffer[pos++] = '"';
+                for(int it = 0; it < tagLen; it++) {
+                    outputBuffer[pos++] = tagName[it];
+                }
+                outputBuffer[pos++] = '"';
+                outputBuffer[pos++] = ':';
+                outputBuffer[pos++] = '"';
+                for(int it = 0; it < valLen; it++) {
+                    outputBuffer[pos++] = output[it];
+                }
+                outputBuffer[pos++] = '"';
+                outputBuffer[pos++] = ',';
+            }
+
+            free(output);
+        }
     
 
 
 
 
     }
-    printf("%s", get_exif_tag_name((buffer[i] << 8) | buffer[i + 1]));
+
+
+    // overwrite last comma
+    outputBuffer[--pos] = '}';
+
+    printf("%s", outputBuffer);
 
     return ERR_OK;
     
@@ -380,7 +609,8 @@ static ErrorCode translate_byte(const uint32_t count, const uint8_t *val_or_off,
 
     // if the count is too large look at offset
     } else {
-        char *output = malloc(count + 3);
+        size_t maxlen = (count + 3);
+        char *output = malloc(maxlen);
         int pos = 0;
         
         // if output did not allocate properly
@@ -390,7 +620,7 @@ static ErrorCode translate_byte(const uint32_t count, const uint8_t *val_or_off,
 
         // itterate over every byte and append it to the output buffer
         for (int j = offset + value; j < count + offset + value; j++) {
-            int written = snprintf(&output[pos], sizeof(output) - pos, "0x%02X ", buffer[j]);
+            int written = snprintf(&output[pos], maxlen, "0x%02X ", buffer[j]);
             if (written < 0 || written >= (int)(sizeof(output) - pos)) {
                 break;
             }
@@ -405,10 +635,7 @@ static ErrorCode translate_byte(const uint32_t count, const uint8_t *val_or_off,
 
 static ErrorCode translate_ascii(const uint32_t count, const uint8_t *val_or_off, size_t offset, const uint8_t *buffer, char *output) {
     
-    // If the malloc failed return an error
-    if(output == NULL) {
-        return ERR_MALLOC_ASCII_TRANS;
-    }
+
 
     // iterator for tracking appending to string
     size_t pos = 0;
@@ -450,7 +677,6 @@ static ErrorCode translate_ascii(const uint32_t count, const uint8_t *val_or_off
         }
         output[pos] = '\0';
 
-        printf("%s", output);
 
 
     }
@@ -494,4 +720,39 @@ static ErrorCode translate_rational(const uint32_t count, const uint8_t *val_or_
 
     return ERR_OK;
 }
+
+static ErrorCode translate_srational(const uint32_t count, const uint8_t *val_or_off, size_t offset, const uint8_t *buffer, char *output) {
+
+    // fetches the value from the tag
+    const uint32_t value = ((val_or_off[0]) << 24 |
+                            (val_or_off[1]) << 16 |
+                            (val_or_off[2]) << 8  |
+                            (val_or_off[3]));
+
+
+    // Check that the count is only one rational
+    if (count != 1) {
+       return ERR_RATIONAL_COUNT;
+    }
+
+    size_t dataLoc = offset + value;
+
+    // Read the values from the resgister
+    const int32_t numerator = (buffer[dataLoc++] << 24 |
+                                buffer[dataLoc++] << 16 |
+                                buffer[dataLoc++] << 8  |
+                                buffer[dataLoc++]);
+
+    const int32_t denominator = (buffer[dataLoc++] << 24 |
+                                  buffer[dataLoc++] << 16 |
+                                  buffer[dataLoc++] << 8  |
+                                  buffer[dataLoc++]);
+
+    // convert the data into a string
+    snprintf(&output[0], sizeof(output), "%d/%d", numerator, denominator);
+
+
+    return ERR_OK;
+}
+
 
