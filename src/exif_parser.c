@@ -590,6 +590,7 @@ static ErrorCode read_jpeg_u8(const uint8_t *buffer, size_t offset, size_t exifL
 
     // overwrite last comma
     outputBuffer[--pos] = '}';
+    outputBuffer[++pos] = '\0'; 
 
     // printf("%s", outputBuffer);
 
