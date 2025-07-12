@@ -562,7 +562,7 @@ static ErrorCode read_jpeg_u8(const uint8_t *buffer, size_t offset, size_t exifL
             int valLen = strlen(output);
             int tagLen = strlen(tagName);
 
-            if(pos + valLen + tagLen < outputCap && tag != 0x8769) {
+            if( strcmp(tagName, "unknown") && pos + valLen + tagLen < outputCap && tag != 0x8769 ) {
 
                 outputBuffer[pos++] = '"';
                 for(int it = 0; it < tagLen; it++) {
