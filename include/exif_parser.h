@@ -11,6 +11,7 @@
 // **** Error Handling **** //
 typedef enum {
     ERR_OK = 0,
+    ERR_TOO_SMALL,
     ERR_EXIF_MISSING,
     ERR_ENDIAN_MISSING,
     ERR_TIFF_MISSING,
@@ -48,11 +49,11 @@ const char *get_exif_tag_name(uint16_t tag);
 
 // **** JPEG Processors **** //
 
-void parse_jpeg(const uint8_t *buffer, size_t length);
+void parse_jpeg(const uint8_t *buffer, size_t length, char *outputBuffer, size_t outputCap);
 
 
 
-static ErrorCode read_jpeg_u8(const uint8_t *buffer, size_t offset, size_t exifLength);
+static ErrorCode read_jpeg_u8(const uint8_t *buffer, size_t offset, size_t exifLength, char *outputBuffer, size_t outputCap);
 
 static ErrorCode translate_byte(const uint32_t count, const uint8_t *val_or_off, size_t offset, const uint8_t *buffer, char *output);
 static ErrorCode translate_ascii(const uint32_t count, const uint8_t *val_or_off, size_t offset, const uint8_t *buffer, char *output);

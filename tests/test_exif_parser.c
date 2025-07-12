@@ -44,8 +44,16 @@ int main() {
         return 1;
     }
 
-    parse_jpeg(buffer, filesize);
+    size_t outputSize = 2000;
 
+    char *outputBuffer = malloc(outputSize);
+
+    parse_jpeg(buffer, filesize, outputBuffer, outputSize);
+    
+    printf("%s", outputBuffer);
+
+    free(outputBuffer);
+    
     printf("/n");
 
     // Cleanup

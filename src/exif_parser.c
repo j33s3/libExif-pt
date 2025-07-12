@@ -22,6 +22,7 @@
 const char *get_error_string(ErrorCode code) {
     switch (code) {
         case ERR_OK: return "No Error";
+        case ERR_TOO_SMALL: return "Output Buffer is too small";
         case ERR_EXIF_MISSING: return "Missing EXIF Data";
         case ERR_ENDIAN_MISSING: return "Missing Enddianess";
         case ERR_TIFF_MISSING: return "Missing TIFF";
@@ -113,10 +114,15 @@ const char *get_exif_tag_name(uint16_t tag) {
  * @param buffer Uint8_t pointer for the image
  * @param length Length of the image file
  */
-void parse_jpeg(const uint8_t *buffer, size_t length) {
+void parse_jpeg(const uint8_t *buffer, size_t length, char *outputBuffer, size_t outputCap) {
     size_t i = 2;
     uint16_t seg_length = 0;
     uint8_t offset = 10;
+
+    // Check Malloc is processed
+    if (outputBuffer == NULL) {
+        return;
+    }
 
     // Iterate through the items till all is found
     while (i + 4 < length) {
@@ -143,15 +149,18 @@ void parse_jpeg(const uint8_t *buffer, size_t length) {
                 buffer[i + 8] == 0x00 &&
                 buffer[i + 9] == 0x00
             ) {
-                fflush(stdout);
-                for(int j = i; j < seg_length + offset + 2; j++) {
-                    printf("%02X,", buffer[j]);
-                }
-                fflush(stdout);
 
-                ErrorCode response = read_jpeg_u8(buffer, offset, seg_length);
 
-                fflush(stdout);
+
+                // fflush(stdout);
+                // for(int j = i; j < seg_length + offset + 2; j++) {
+                //     printf("%02X,", buffer[j]);
+                // }
+                // fflush(stdout);
+
+                ErrorCode response = read_jpeg_u8(buffer, offset, seg_length, outputBuffer, outputCap);
+
+                // fflush(stdout);
             }
 
 
@@ -164,9 +173,10 @@ void parse_jpeg(const uint8_t *buffer, size_t length) {
 
         printf("%s", "EOF");
         fflush(stdout);
+    
 
 
-        return;
+    return;
 }
 
 /**
@@ -177,8 +187,8 @@ void parse_jpeg(const uint8_t *buffer, size_t length) {
  * @param exifLength 
  * @return uint8_t* 
  */
-static ErrorCode read_jpeg_u8(const uint8_t *buffer, size_t offset, size_t exifLength) {
-    char *outputBuffer = malloc(2000);
+static ErrorCode read_jpeg_u8(const uint8_t *buffer, size_t offset, size_t exifLength, char *outputBuffer, size_t outputCap) {
+
     int pos = 0;
     outputBuffer[pos++] = '{';
     uint16_t tiff_tags = 0;
@@ -552,7 +562,7 @@ static ErrorCode read_jpeg_u8(const uint8_t *buffer, size_t offset, size_t exifL
             int valLen = strlen(output);
             int tagLen = strlen(tagName);
 
-            if(pos + valLen + tagLen < 2000 && tag != 0x8769) {
+            if(pos + valLen + tagLen < outputCap && tag != 0x8769) {
 
                 outputBuffer[pos++] = '"';
                 for(int it = 0; it < tagLen; it++) {
@@ -581,7 +591,7 @@ static ErrorCode read_jpeg_u8(const uint8_t *buffer, size_t offset, size_t exifL
     // overwrite last comma
     outputBuffer[--pos] = '}';
 
-    printf("%s", outputBuffer);
+    // printf("%s", outputBuffer);
 
     return ERR_OK;
     
