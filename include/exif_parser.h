@@ -49,6 +49,14 @@ const char *get_exif_tag_name(uint16_t tag);
 
 // **** JPEG Processors **** //
 
+/**
+ * @brief Entry point for the parser
+ * 
+ * @param buffer image buffer, must malloc and free manually
+ * @param length length of the buffer
+ * @param outputBuffer output buffer, must malloc and free manually
+ * @param outputCap output size
+ */
 void parse_jpeg(const uint8_t *buffer, size_t length, char *outputBuffer, size_t outputCap);
 
 
