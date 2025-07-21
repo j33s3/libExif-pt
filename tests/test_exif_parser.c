@@ -50,13 +50,11 @@ int main() {
   printf("READ FILE INTO BUFFER\n");
 
 
-  char *outputBuffer = malloc(1);
-  outputBuffer[0] = '\0';
 
   printf("CREATING OUTPUT BUFFER\n");
 
-
-  char *response = parse_jpeg(buffer, filesize, &outputBuffer);
+  printf("File Length: %zu:\n", filesize);
+  char *response = parse_jpeg(buffer, filesize);
 
   printf("Getting Response\n");
 
@@ -66,8 +64,6 @@ int main() {
   printf("\n%s\n", response);
   fflush(stdout);
 
-  printf("\n%s\nv", outputBuffer);
-  fflush(stdout);
 
   // Cleanup
   free(buffer);

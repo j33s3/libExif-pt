@@ -95,7 +95,7 @@ static const ExifTag exif_tags[] = {
 
 
 // ** Entry point ** //
-char *parse_jpeg(const uint8_t *buffer, size_t length, char **output);
+char *parse_jpeg(const uint8_t *buffer, size_t length);
 
 // **** STATIC FUNCTIONS **** //
 

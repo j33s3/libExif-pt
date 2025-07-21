@@ -73,13 +73,13 @@ static const char *get_exif_tag_name(uint16_t tag) {
 }
 
 // **** PARSER **** //
-char *parse_jpeg(const uint8_t *buffer, size_t length, char **output) {
+char *parse_jpeg(const uint8_t *buffer, size_t length) {
 
     size_t i = 2;                                               // SKIP SOI (0xFF, 0xD8)
     uint16_t seg_length = 0;                                    // Track how long the Exif chunk is
-    *output = malloc(2);                                    // Allocate memory to storing the output
-    (*output)[0] = '{';
-    (*output)[1] = '\0';
+    char *output = malloc(2);                                    // Allocate memory to storing the output
+    output[0] = '{';
+    output[1] = '\0';
 
     if (*output == NULL) {                                       // If Malloc fails
         return get_error_string(ERR_MALLOC);
@@ -106,12 +106,13 @@ char *parse_jpeg(const uint8_t *buffer, size_t length, char **output) {
                 buffer[i + 8] == 0x00 && 
                 buffer[i + 9] == 0x00)) {
                     i += 10;                                         // Accounts for our checks
-                    return get_error_string(u8_crawler(buffer, seg_length, i, output));
+                    u8_crawler(buffer, seg_length, i, &output);
+                    return output;
             }
         }
         i++;
     }
-    return get_error_string(ERR_UNKNOWN);
+    return NULL;
 }
 
 static ErrorCode u8_crawler(const uint8_t *buffer, uint16_t seg_length, size_t offset, char **output) {
