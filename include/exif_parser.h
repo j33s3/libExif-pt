@@ -60,7 +60,7 @@ static const ExifTag exif_tags[] = {
     {0x8298, "Copyright"},
     {0x8769, "ExifOffset"},
 
-    {0x829A, "ExosureTime"},
+    {0x829A, "ExposureTime"},
     {0x829D, "FNumber"},
     {0x8822, "ExposureProgram"},
     {0x8827, "ISO"},
