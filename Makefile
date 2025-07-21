@@ -1,9 +1,13 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c99 -Iinclude
+CFLAGS = -Wall -Wextra -std=c99 -g -Iinclude 
 BUILD_DIR = build
 SRC_DIR = src
 TEST_DIR = tests
 LIB_NAME = lib/libExif-pt.a
+
+ifdef VERBOSE
+CFLAGS += -DVERBOSE
+endif
 
 
 SRCS = $(wildcard $(SRC_DIR)/*.c)
@@ -35,3 +39,6 @@ test: all
 
 clean:
 	rm -rf $(BUILD_DIR) lib
+
+test_verbose:
+	$(MAKE) VERBOSE=1 test
