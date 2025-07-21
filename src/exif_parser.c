@@ -275,8 +275,8 @@ static ErrorCode u8_crawler(const uint8_t *buffer, uint16_t seg_length, size_t o
             }
 
         }
-
-        if(status == ERR_OK) {                                          // If the response is valid
+                                    //TEMP DISABLE UNDEFINED
+        if(status == ERR_OK && type != 0x0007) {                                          // If the response is valid
             const char *tagName = get_exif_tag_name(tag);
 
 
