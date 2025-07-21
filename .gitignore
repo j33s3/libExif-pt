@@ -147,3 +147,11 @@ ipch/
 
 # Visual Studio Trace Files
 *.e2e
+
+
+# WASM
+output.data
+output.html
+output.js
+output.wasm
+output.wasm.map
