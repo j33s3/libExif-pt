@@ -52,10 +52,10 @@ static const ExifTag exif_tags[] = {
     {0x010F, "Make"},
     {0x0110, "Model"},
     {0x0112, "Orientation"},
-    {0x011A, "XResolution"},
-    {0x011B, "YResolution"},
-    {0x0128, "ResolutionUnit"},
-    {0x0131, "Software"},
+    // {0x011A, "XResolution"},
+    // {0x011B, "YResolution"},
+    // {0x0128, "ResolutionUnit"},
+    // {0x0131, "Software"},
     {0x0132, "ModifyDate"},
     {0x8298, "Copyright"},
     {0x8769, "ExifOffset"},
@@ -66,35 +66,42 @@ static const ExifTag exif_tags[] = {
     {0x8827, "ISO"},
     {0x8830, "SensitivityType"},
     {0x8831, "StandardOutputSensitivity"},
-    {0x9000, "ExifVersion"},
+    // {0x9000, "ExifVersion"},
     {0x9003, "DateTimeOriginal"},
     {0x9004, "CreateDate"},
-    {0x9101, "ComponentsConfiguration"},
-    {0x9204, "ExposureCompensation"},
-    {0x9207, "MeteringMode"},
-    {0x9209, "Flash"},
+    // {0x9101, "ComponentsConfiguration"},
+    // {0x9204, "ExposureCompensation"},
+    // {0x9207, "MeteringMode"},
+    // {0x9209, "Flash"},
     {0x920A, "FocalLength"},
-    {0xA000, "FlashpixVersion"},
+    // {0xA000, "FlashpixVersion"},
     {0xA001, "ColorSpace"},
     {0xA002, "ExifImageWidth"},
     {0xA003, "ExifImageHeight"},
-    {0xA217, "SensingMethod"},
-    {0xA300, "FileSource"},
-    {0xA301, "SceneType"},
-    {0xA401, "CustomRendered"},
-    {0xA402, "ExposureMode"},
-    {0xA403, "WhiteBalanced"},
+    // {0xA217, "SensingMethod"},
+    // {0xA300, "FileSource"},
+    // {0xA301, "SceneType"},
+    // {0xA401, "CustomRendered"},
+    // {0xA402, "ExposureMode"},
+    // {0xA403, "WhiteBalanced"},
     {0xA405, "FocalLengthIn35mmFormat"},
-    {0xA406, "SceneCaptureType"},
+    // {0xA406, "SceneCaptureType"},
     {0xA408, "Contrast"},
     {0xA409, "Saturation"},
     {0xA40A, "Sharpness"},
-    {0xA40C, "SubjectDistanceRange"},
+    // {0xA40C, "SubjectDistanceRange"},
     {0xA500, "Gamma"},
 };
 
 
 // ** Entry point ** //
+/**
+ * @brief Parses through the 8 bit integer image array to convert exif to text
+ * 
+ * @param buffer
+ * @param length 
+ * @return char* 
+ */
 char *parse_jpeg(const uint8_t *buffer, size_t length);
 
 // **** STATIC FUNCTIONS **** //
